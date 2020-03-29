@@ -1,0 +1,330 @@
+{
+  "nbformat": 4,
+  "nbformat_minor": 0,
+  "metadata": {
+    "kernelspec": {
+      "display_name": "Python 3",
+      "language": "python",
+      "name": "python3"
+    },
+    "language_info": {
+      "codemirror_mode": {
+        "name": "ipython",
+        "version": 3
+      },
+      "file_extension": ".py",
+      "mimetype": "text/x-python",
+      "name": "python",
+      "nbconvert_exporter": "python",
+      "pygments_lexer": "ipython3",
+      "version": "3.6.1"
+    },
+    "colab": {
+      "name": "practical-1.ipynb",
+      "provenance": []
+    }
+  },
+  "cells": [
+    {
+      "cell_type": "markdown",
+      "metadata": {
+        "id": "ND4BIkDg0YDs",
+        "colab_type": "text"
+      },
+      "source": [
+        "# Practical 1\n",
+        "# From linear to non-linear models with Tensorflow and MNIST\n",
+        "\n",
+        "### Introduction\n",
+        "\n",
+        "In this practical, we will build a linear and non-linear classification model using Tensorflow and the MNIST dataset. MNIST consists of 60 000 grayscale training images of handwritten digits (i.e., 0, 1, 2, ..., 9). The test set consists of 10 000 images that we want to classify correctly with our model. More detail on the dataset can be viewed [here](https://en.wikipedia.org/wiki/MNIST_database).\n",
+        "\n",
+        "### Learning objectives\n",
+        "* Implement a linear classifier using the Tensorflow math libraries and the MNIST image dataset.\n",
+        "* Implement a non-linear classifier by adding one hidden layer with non-linear activation units. \n",
+        "* Understand basic Tensorflow objects, operations and graphs.\n",
+        "* Understand *cross entropy loss*, *activation units*, the *softmax* layer, and basic knowledge of *gradient descent* optimisation.\n",
+        "* Understand the hyperparameters associated with a linear and simple non-linear network.\n",
+        "-------------------------------------------------------------------------------------------------------------------------\n",
+        "### What is expected of you?\n",
+        "\n",
+        "#### Part I (linear model):\n",
+        "1. Step through the initial code and make sure the MNIST data downloaded successfully. Make sure you understand why the categorical output variable (the label) is *one-hot encoded*.\n",
+        "2. Use Tensorflow placeholders, variables and arithmetic operators to create a graph for a linear classifier. Make sure all tensor dimensions are configured correctly. \n",
+        "3. Create a loss function using the `softmax_cross_entropy_with_logits_v2` function in Tensorflow. Make sure you understand what this function is doing (more on this [here](https://www.tensorflow.org/api_docs/python/tf/nn/softmax_cross_entropy_with_logits_v2)). Note that we could have written the full equation for the loss function, however the built-in Tensorflow function is numerically more stable (more on this [here](https://en.wikipedia.org/wiki/Cross_entropy)).\n",
+        "4. Use the `GradientDescentOptimizer` optimiser in Tensorflow to minimise the cross entropy loss. Make sure you understand what this function is doing (more on this [here](https://www.tensorflow.org/api_docs/python/tf/train/GradientDescentOptimizer)).\n",
+        "5. Create an appropriate evaluation metric that will help you determine the accuracy of your classifier.\n",
+        "6. Create a training loop that cycles through random batches of the training data. We also want to be able to cycle through the entire dataset a number of times (more on this [here](https://stackoverflow.com/questions/4752626/epoch-vs-iteration-when-training-neural-networks)).\n",
+        "7. Document all the hyperparameter values in your experiment and plot the **training set** cross entropy loss and **performance** (based on the evaluation metric you selected) of the linear model.\n",
+        "8. Tweak the batch size and learning rate and document your observations.\n",
+        "\n",
+        "#### Part II (non-linear model):\n",
+        "1. Modify the graph to make the classifier non-linear by adding a hidden layer (of size 100 nodes) with non-linear activations. Use *rectified linear units* to introduce the pointwise nonlinearity (more on this [here](https://www.tensorflow.org/api_docs/python/tf/nn/relu)). \n",
+        "2. Document all the hyperparameters in your experiment, and the model performance.\n",
+        "3. Tweak the hyperparameters and document your observations.\n",
+        "4. Why do you think this exercise is useful to understand in the context of smart grid technology?"
+      ]
+    },
+    {
+      "cell_type": "code",
+      "metadata": {
+        "id": "ncUbQtof0YD7",
+        "colab_type": "code",
+        "colab": {
+          "base_uri": "https://localhost:8080/",
+          "height": 778
+        },
+        "outputId": "ae15088b-bae6-44e4-ccb6-888a582b0ece"
+      },
+      "source": [
+        "%matplotlib inline\n",
+        "\n",
+        "import numpy as np\n",
+        "import tensorflow as tf\n",
+        "import matplotlib.pyplot as plt\n",
+        "from tensorflow.examples.tutorials.mnist import input_data\n",
+        "\n",
+        "# this function is for visualising the MNIST data #\n",
+        "def display_mnist_images(gens, num_images):\n",
+        "    plt.rcParams['image.interpolation'] = 'nearest'\n",
+        "    plt.rcParams['image.cmap'] = 'gray'\n",
+        "    fig, axs = plt.subplots(1, num_images, figsize=(25, 3))\n",
+        "    for i in range(num_images):\n",
+        "        reshaped_img = (gens[i].reshape(28, 28) * 255).astype(np.uint8)\n",
+        "        axs.flat[i].imshow(reshaped_img)\n",
+        "    plt.show()\n",
+        "\n",
+        "# download MNIST dataset #\n",
+        "mnist = input_data.read_data_sets(\"MNIST_data/\", one_hot=True)\n",
+        "\n",
+        "# visualize random sample of MNIST images #\n",
+        "batch_xs, batch_ys = mnist.train.next_batch(10)\n",
+        "list_of_images = np.split(batch_xs, 10)\n",
+        "display_mnist_images(list_of_images, 10)"
+      ],
+      "execution_count": 2,
+      "outputs": [
+        {
+          "output_type": "display_data",
+          "data": {
+            "text/html": [
+              "<p style=\"color: red;\">\n",
+              "The default version of TensorFlow in Colab will soon switch to TensorFlow 2.x.<br>\n",
+              "We recommend you <a href=\"https://www.tensorflow.org/guide/migrate\" target=\"_blank\">upgrade</a> now \n",
+              "or ensure your notebook will continue to use TensorFlow 1.x via the <code>%tensorflow_version 1.x</code> magic:\n",
+              "<a href=\"https://colab.research.google.com/notebooks/tensorflow_version.ipynb\" target=\"_blank\">more info</a>.</p>\n"
+            ],
+            "text/plain": [
+              "<IPython.core.display.HTML object>"
+            ]
+          },
+          "metadata": {
+            "tags": []
+          }
+        },
+        {
+          "output_type": "stream",
+          "text": [
+            "WARNING:tensorflow:From <ipython-input-2-1c053e048e56>:19: read_data_sets (from tensorflow.contrib.learn.python.learn.datasets.mnist) is deprecated and will be removed in a future version.\n",
+            "Instructions for updating:\n",
+            "Please use alternatives such as official/mnist/dataset.py from tensorflow/models.\n",
+            "WARNING:tensorflow:From /usr/local/lib/python3.6/dist-packages/tensorflow_core/contrib/learn/python/learn/datasets/mnist.py:260: maybe_download (from tensorflow.contrib.learn.python.learn.datasets.base) is deprecated and will be removed in a future version.\n",
+            "Instructions for updating:\n",
+            "Please write your own downloading logic.\n",
+            "WARNING:tensorflow:From /usr/local/lib/python3.6/dist-packages/tensorflow_core/contrib/learn/python/learn/datasets/base.py:252: _internal_retry.<locals>.wrap.<locals>.wrapped_fn (from tensorflow.contrib.learn.python.learn.datasets.base) is deprecated and will be removed in a future version.\n",
+            "Instructions for updating:\n",
+            "Please use urllib or similar directly.\n",
+            "Successfully downloaded train-images-idx3-ubyte.gz 9912422 bytes.\n",
+            "WARNING:tensorflow:From /usr/local/lib/python3.6/dist-packages/tensorflow_core/contrib/learn/python/learn/datasets/mnist.py:262: extract_images (from tensorflow.contrib.learn.python.learn.datasets.mnist) is deprecated and will be removed in a future version.\n",
+            "Instructions for updating:\n",
+            "Please use tf.data to implement this functionality.\n",
+            "Extracting MNIST_data/train-images-idx3-ubyte.gz\n",
+            "Successfully downloaded train-labels-idx1-ubyte.gz 28881 bytes.\n",
+            "WARNING:tensorflow:From /usr/local/lib/python3.6/dist-packages/tensorflow_core/contrib/learn/python/learn/datasets/mnist.py:267: extract_labels (from tensorflow.contrib.learn.python.learn.datasets.mnist) is deprecated and will be removed in a future version.\n",
+            "Instructions for updating:\n",
+            "Please use tf.data to implement this functionality.\n",
+            "Extracting MNIST_data/train-labels-idx1-ubyte.gz\n",
+            "WARNING:tensorflow:From /usr/local/lib/python3.6/dist-packages/tensorflow_core/contrib/learn/python/learn/datasets/mnist.py:110: dense_to_one_hot (from tensorflow.contrib.learn.python.learn.datasets.mnist) is deprecated and will be removed in a future version.\n",
+            "Instructions for updating:\n",
+            "Please use tf.one_hot on tensors.\n",
+            "Successfully downloaded t10k-images-idx3-ubyte.gz 1648877 bytes.\n",
+            "Extracting MNIST_data/t10k-images-idx3-ubyte.gz\n",
+            "Successfully downloaded t10k-labels-idx1-ubyte.gz 4542 bytes.\n",
+            "Extracting MNIST_data/t10k-labels-idx1-ubyte.gz\n",
+            "WARNING:tensorflow:From /usr/local/lib/python3.6/dist-packages/tensorflow_core/contrib/learn/python/learn/datasets/mnist.py:290: DataSet.__init__ (from tensorflow.contrib.learn.python.learn.datasets.mnist) is deprecated and will be removed in a future version.\n",
+            "Instructions for updating:\n",
+            "Please use alternatives such as official/mnist/dataset.py from tensorflow/models.\n"
+          ],
+          "name": "stdout"
+        },
+        {
+          "output_type": "display_data",
+          "data": {
+            "image/png": "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\ntAAAAABJRU5ErkJggg==\n",
+            "text/plain": [
+              "<Figure size 1800x216 with 10 Axes>"
+            ]
+          },
+          "metadata": {
+            "tags": []
+          }
+        }
+      ]
+    },
+    {
+      "cell_type": "code",
+      "metadata": {
+        "id": "8NTsHPkC0YE1",
+        "colab_type": "code",
+        "colab": {
+          "base_uri": "https://localhost:8080/",
+          "height": 989
+        },
+        "outputId": "ac8669f5-96a1-4e86-f88b-881ad5bcfdc3"
+      },
+      "source": [
+        "x_dim, train_examples, n_classes = mnist.train.images.shape[1], mnist.train.num_examples, mnist.train.labels.shape[1]\n",
+        "\n",
+        "######################################\n",
+        "# define the model (build the graph) #\n",
+        "######################################\n",
+        "\n",
+        "x = tf.placeholder(tf.float32,[None, x_dim])\n",
+        "W = tf.Variable(tf.random_normal([x_dim, n_classes]))\n",
+        "b = tf.Variable(tf.ones([n_classes]))\n",
+        "y = tf.placeholder(tf.float32,[None, n_classes])\n",
+        "y_ = tf.add(tf.matmul(x,W),b)\n",
+        "prob=tf.nn.softmax(y_)\n",
+        "\n",
+        "########################\n",
+        "# define loss function #\n",
+        "########################\n",
+        "\n",
+        "cross_entropy_loss = tf.reduce_mean(tf.nn.softmax_cross_entropy_with_logits_v2(logits=y_, labels=y))\n",
+        "\n",
+        "learning_rate = 0.01\n",
+        "\n",
+        "train_step = tf.train.GradientDescentOptimizer(learning_rate).minimize(cross_entropy_loss)\n",
+        "\n",
+        "###########################\n",
+        "# define model evaluation #\n",
+        "###########################\n",
+        "\n",
+        "actual_class, predicted_class= tf.argmax(y,1), tf.argmax(prob, 1)\n",
+        "\n",
+        "correct_prediction = tf.cast(tf.equal(predicted_class, actual_class), tf.float32)\n",
+        "\n",
+        "classification_accuracy= tf.reduce_mean(correct_prediction)\n",
+        "\n",
+        "#########################\n",
+        "# define training cycle #\n",
+        "#########################\n",
+        "\n",
+        "num_epochs = 50\n",
+        "batch_size = 20\n",
+        "\n",
+        "# initializing the variables before starting the session #\n",
+        "init = tf.global_variables_initializer()\n",
+        "\n",
+        "# launch the graph in a session (use the session as a context manager) #\n",
+        "with tf.Session() as sess:\n",
+        "    # run session #\n",
+        "    sess.run(init)\n",
+        "    # start main training cycle #\n",
+        "    for epoch in range(num_epochs):\n",
+        "        avg_cost = 0.\n",
+        "        avg_acc = 0.\n",
+        "        total_batch = int(mnist.train.num_examples / batch_size)\n",
+        "        # loop over all batches #\n",
+        "        for i in range(total_batch):\n",
+        "            batch_x, batch_y = mnist.train.next_batch(batch_size)\n",
+        "            # run optimization op (backprop), cost op and accuracy op (to get training losses) #\n",
+        "            _, c, a = sess.run([train_step, cross_entropy_loss, classification_accuracy], feed_dict={x: batch_x, y: batch_y})\n",
+        "            # compute avg training loss and avg training accuracy #\n",
+        "            avg_cost += c / total_batch\n",
+        "            avg_acc += a / total_batch\n",
+        "        # display logs per epoch step #\n",
+        "        if epoch % 1 == 0:\n",
+        "            print(\"Epoch {}: cross-entropy-loss = {:.4f}, training-accuracy = {:.3f}%\".format(epoch + 1, avg_cost, avg_acc * 100))\n",
+        "    print(\"Optimization Finished!\")\n",
+        "    # calculate test set accuracy #\n",
+        "    test_accuracy = classification_accuracy.eval({x: mnist.test.images, y: mnist.test.labels})\n",
+        "    print(\"Accuracy on test set = {:.3f}%\".format(test_accuracy * 100))"
+      ],
+      "execution_count": 11,
+      "outputs": [
+        {
+          "output_type": "stream",
+          "text": [
+            "Epoch 1: cross-entropy-loss = 3.9172, training-accuracy = 46.382%\n",
+            "Epoch 2: cross-entropy-loss = 1.4926, training-accuracy = 71.020%\n",
+            "Epoch 3: cross-entropy-loss = 1.1459, training-accuracy = 76.980%\n",
+            "Epoch 4: cross-entropy-loss = 0.9887, training-accuracy = 79.893%\n",
+            "Epoch 5: cross-entropy-loss = 0.8942, training-accuracy = 81.642%\n",
+            "Epoch 6: cross-entropy-loss = 0.8274, training-accuracy = 82.662%\n",
+            "Epoch 7: cross-entropy-loss = 0.7772, training-accuracy = 83.567%\n",
+            "Epoch 8: cross-entropy-loss = 0.7376, training-accuracy = 84.238%\n",
+            "Epoch 9: cross-entropy-loss = 0.7050, training-accuracy = 84.775%\n",
+            "Epoch 10: cross-entropy-loss = 0.6778, training-accuracy = 85.280%\n",
+            "Epoch 11: cross-entropy-loss = 0.6546, training-accuracy = 85.682%\n",
+            "Epoch 12: cross-entropy-loss = 0.6338, training-accuracy = 86.096%\n",
+            "Epoch 13: cross-entropy-loss = 0.6164, training-accuracy = 86.365%\n",
+            "Epoch 14: cross-entropy-loss = 0.5999, training-accuracy = 86.542%\n",
+            "Epoch 15: cross-entropy-loss = 0.5862, training-accuracy = 86.829%\n",
+            "Epoch 16: cross-entropy-loss = 0.5731, training-accuracy = 87.011%\n",
+            "Epoch 17: cross-entropy-loss = 0.5613, training-accuracy = 87.242%\n",
+            "Epoch 18: cross-entropy-loss = 0.5505, training-accuracy = 87.353%\n",
+            "Epoch 19: cross-entropy-loss = 0.5410, training-accuracy = 87.471%\n",
+            "Epoch 20: cross-entropy-loss = 0.5321, training-accuracy = 87.644%\n",
+            "Epoch 21: cross-entropy-loss = 0.5227, training-accuracy = 87.762%\n",
+            "Epoch 22: cross-entropy-loss = 0.5147, training-accuracy = 87.884%\n",
+            "Epoch 23: cross-entropy-loss = 0.5079, training-accuracy = 87.985%\n",
+            "Epoch 24: cross-entropy-loss = 0.5007, training-accuracy = 88.155%\n",
+            "Epoch 25: cross-entropy-loss = 0.4939, training-accuracy = 88.216%\n",
+            "Epoch 26: cross-entropy-loss = 0.4882, training-accuracy = 88.331%\n",
+            "Epoch 27: cross-entropy-loss = 0.4822, training-accuracy = 88.458%\n",
+            "Epoch 28: cross-entropy-loss = 0.4769, training-accuracy = 88.509%\n",
+            "Epoch 29: cross-entropy-loss = 0.4716, training-accuracy = 88.669%\n",
+            "Epoch 30: cross-entropy-loss = 0.4668, training-accuracy = 88.696%\n",
+            "Epoch 31: cross-entropy-loss = 0.4618, training-accuracy = 88.807%\n",
+            "Epoch 32: cross-entropy-loss = 0.4573, training-accuracy = 88.905%\n",
+            "Epoch 33: cross-entropy-loss = 0.4531, training-accuracy = 88.964%\n",
+            "Epoch 34: cross-entropy-loss = 0.4487, training-accuracy = 89.085%\n",
+            "Epoch 35: cross-entropy-loss = 0.4450, training-accuracy = 89.071%\n",
+            "Epoch 36: cross-entropy-loss = 0.4411, training-accuracy = 89.151%\n",
+            "Epoch 37: cross-entropy-loss = 0.4374, training-accuracy = 89.262%\n",
+            "Epoch 38: cross-entropy-loss = 0.4339, training-accuracy = 89.340%\n",
+            "Epoch 39: cross-entropy-loss = 0.4306, training-accuracy = 89.395%\n",
+            "Epoch 40: cross-entropy-loss = 0.4273, training-accuracy = 89.435%\n",
+            "Epoch 41: cross-entropy-loss = 0.4239, training-accuracy = 89.475%\n",
+            "Epoch 42: cross-entropy-loss = 0.4210, training-accuracy = 89.580%\n",
+            "Epoch 43: cross-entropy-loss = 0.4180, training-accuracy = 89.593%\n",
+            "Epoch 44: cross-entropy-loss = 0.4154, training-accuracy = 89.595%\n",
+            "Epoch 45: cross-entropy-loss = 0.4123, training-accuracy = 89.658%\n",
+            "Epoch 46: cross-entropy-loss = 0.4097, training-accuracy = 89.715%\n",
+            "Epoch 47: cross-entropy-loss = 0.4074, training-accuracy = 89.785%\n",
+            "Epoch 48: cross-entropy-loss = 0.4047, training-accuracy = 89.820%\n",
+            "Epoch 49: cross-entropy-loss = 0.4020, training-accuracy = 89.840%\n",
+            "Epoch 50: cross-entropy-loss = 0.3998, training-accuracy = 89.933%\n",
+            "Optimization Finished!\n",
+            "Accuracy on test set = 89.620%\n"
+          ],
+          "name": "stdout"
+        }
+      ]
+    },
+    {
+      "cell_type": "code",
+      "metadata": {
+        "id": "IGUrmuCo0YFb",
+        "colab_type": "code",
+        "colab": {}
+      },
+      "source": [
+        ""
+      ],
+      "execution_count": 0,
+      "outputs": []
+    }
+  ]
+}
